@@ -1,86 +1,122 @@
-# DiscShelf v4 — PDF selection + zoom slider + Markdown / TXT readers
+# DiscShelf v6 — Coloured Markdown + Offline MathJax
 
-A **manual-launch, completely offline** Debian 13 bookshelf application. Shows documents on a CD/DVD as coloured filename-labeled spines and opens PDF, Markdown, and TXT **inside DiscShelf**. It does not install a service, index document contents, connect to the internet, or create a persistent library database.
+DiscShelf is a **manual-launch, fully offline** CD/DVD bookshelf for Debian 13. It scans **filenames only**, draws coloured book spines, and opens supported documents without launching external viewers. There is **no autostart, background daemon, document database, or network access**.
 
-## v4 changes
+## v6: Inline Markdown text colours (FIX)
 
-- **PDF zoom slider (25–400%)** with live percent display, `+`, `−`, and **Fit width**.
-- **PDF text selection:** click-and-drag across text **on a page** to show a temporary **blue** selection overlay. Press `Ctrl+C`, use the **Copy text** button, or right-click **Copy selected text**. Does *not* write yellow highlights, annotations, or modifications to the PDF.
-- **Markdown reader (`.md`):** native Qt rich-text/Markdown rendering with headings, emphasis, lists, and supported embedded images; selection and copying work like a normal text reader. Qt supports a *subset* of Markdown; particularly complex Markdown extensions may not render identically to browser Markdown engines.
-- **Plain text reader (`.txt`):** monospace text, selectable and copyable. UTF-8, UTF-16 with byte-order mark, and a Windows-1252 fallback are recognized.
-- Both text readers have adjustable font size. External web links cannot launch a browser; Markdown images are restricted to files beneath the currently selected root directory / disc.
+Inline HTML-style `<span>` text colours now render as actual colours, **not literal tags**, in both Markdown readers:
 
-## System requirements / install (Debian 13)
-
-No new packages beyond those used by v3:
-
-```bash
-sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtpdfwidgets
+```markdown
+This is <span style="color: red">red text</span>.
+This is <span style="color: #4f46e5">indigo text</span>.
+And this is <span style="color: forestgreen">**bold green text**</span>.
 ```
 
-Install packages **before disconnecting the internet** if necessary; DiscShelf itself doesn't use the network.
+Supports named CSS colours, hex colours (`#RGB`, `#RRGGBB`, etc.) and basic `rgb()`/`hsl()` colour values. Other inline style properties and HTML attributes are deliberately discarded. Arbitrary source HTML, including `<script>` tags, continues to display as inert, escaped text for safety. Document-supplied JS cannot execute.
 
-## Run
+**Lightweight by default:** a Markdown file with colours but *without mathematics* uses the native Qt reader rather than starting Qt WebEngine. Math-containing files use the existing offline MathJax reader, now with coloured text too.
 
-From inside the extracted `discshelf-mvp` folder:
-
-```bash
-/usr/bin/python3 main.py
-```
-
-For an immediate test without a disc:
+For a quick test:
 
 ```bash
 /usr/bin/python3 main.py tests/fixtures
 ```
 
-This sample folder contains a 3-page selectable PDF, Markdown file, and plain text file.
+Click `colored_notes.md` to test the native Markdown renderer and `equations.md` to test MathJax plus inline coloured text. No additional packages are required if v5 dependencies were installed.
 
-You can alternatively open any local folder / already-mounted disc:
+## Mathematical equations in Markdown
+
+The Markdown reader also recognizes and typesets:
+
+- Inline `$E=mc^2$` and `\(E=mc^2\)`
+- Display math between `$$...$$` or `\[...\]` (including multiline equations)
+- Common LaTeX such as `\frac`, `\sqrt`, `\int`, `\sum`, Greek letters, and superscripts/subscripts
+- Regular Markdown headings, lists, tables, fenced code blocks, images, bold and italic alongside math
+
+**Code blocks are preserved:** `$$...$$` appearing inside a fenced code block or inline backticks is shown as code, not rendered as an equation. Markdown filenames and the bookshelf behave exactly as in v4.
+
+**Fully offline:** MathJax is loaded **from Debian's installed files** (`/usr/share/javascript/mathjax/MathJax.js`), not from a CDN. All HTTP/HTTPS/network requests from its Markdown page are blocked. Markdown HTML is escaped to prevent scripts from a DVD running. Only *application-controlled* JavaScript is enabled in the MathJax reader because MathJax itself requires it; the planned HTML reader will remain HTML/CSS-only, with disc JavaScript disabled.
+
+**Memory-conscious:** Markdown without real equations continues to use the lightweight native Qt text reader. Qt WebEngine starts only if a Markdown document contains supported math. The browser is disposable and uses a private, off-the-record profile with no disk cache/cookies. MathJax rendering will use more RAM than the regular Markdown reader, so test on your 4 GB laptop.
+
+## Installing on Debian 13
+
+If you already installed the PDF and Qt Widget dependencies for v4, the new dependencies are:
+
+```bash
+sudo apt install python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax
+```
+
+For a fresh install of DiscShelf's currently implemented readers:
+
+```bash
+sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtpdfwidgets \
+  python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax
+```
+
+These can be installed via Debian's normal package manager before disconnecting from the internet. Once installed, **DiscShelf never needs internet access** to run or render equations. No Node.js service and no CDN are used.
+
+## Run / test
+
+Extract this ZIP and, in `discshelf-mvp/`, run:
+
+```bash
+/usr/bin/python3 main.py tests/fixtures
+```
+
+Click **equations.md** (purple spine). Expected examples include an inline equation (`E = mc²`) and a displayed integral and infinite sum. A file with ordinary Markdown and no equations keeps the v4 native reader. PDF/TXT features are unchanged.
+
+To scan a folder or already-mounted CD/DVD:
 
 ```bash
 /usr/bin/python3 main.py ~/Documents
 ```
 
-**Usage:** Single-click a red PDF spine for its reader, a purple `.md` spine for Markdown, or a slate `.txt` spine for the text reader. `Back to bookshelf` returns to the original catalog. Book titles can still be inspected on hover.
+Without a path, launch manually using:
 
-## v4 limitations
+```bash
+/usr/bin/python3 main.py
+```
 
-- PDF selection works with actual text embedded in PDFs. **Scanned image-only PDFs need OCR**, which is *not* included.
-- To avoid misleading cross-page selection, PDF drag-selection is currently **limited to one page at a time**. PDF scrolling remains multi-page.
-- In Qt 6.8's QWidget PDF reader, normal text selection isn't native. We add a selectable QPdfView layer based on the Qt PDF page-layout calculations. Its selection geometry should be visually tested on your Debian screen, especially at custom scaling / DPI.
-- Markdown uses Qt's native Markdown subset rather than a browser. Some advanced syntax (and full CSS layout) isn't supported. Markdown images cannot use network addresses and can only reference supported image types on the same selected disc / folder.
-- Markdown/TXT files larger than **16 MiB** cannot be opened by the current simple text reader. This limit prevents locking up old 4 GB laptops with giant text layouts; it doesn't restrict PDFs.
-- `.doc`, `.docx`, `.htm`, `.html`, `.rtf`, `.odt`, `.epub` are still indexed as book spines but don't have readers yet.
-- DiscShelf detects **already mounted** discs, not unmounted ones. Debian may need to mount the disc first, or you can manually choose its mounted directory.
-- No auto-start/daemon. Disc checks occur every 3 seconds **only while the DiscShelf window is running**.
+Optical-disc detection only runs while this window is open. Debian must already mount the disc; automatic mounting is not implemented yet.
 
-## Design notes
+**If the equation reader displays a blank screen on very old graphics hardware:** try software rendering:
 
-- All original documents stay where they are; **no copies or modifications**.
-- Filename-only scanning; metadata catalog is in RAM and cleared on disc removal or app exit.
-- The larger Qt PDF component is imported only when a PDF opens.
-- The Markdown/TXT viewer uses Qt Widgets; it does **not** require Qt WebEngine / Chromium.
-- Large or corrupted files should be closed with **Back to bookshelf** before ejecting a disc.
+```bash
+QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu /usr/bin/python3 main.py tests/fixtures
+```
+
+## Readers and file types
+
+- PDF: integrated Qt PDF viewer, page navigation, zoom slider, text selection/copy.
+- MD: native Qt viewer for ordinary Markdown; MathJax in a locked-down local WebEngine for math-containing Markdown.
+- TXT: native selectable and copyable plain-text viewer.
+- The remaining seven extensions (`.doc`, `.docx`, `.html`, `.htm`, `.rtf`, `.odt`, `.epub`) appear on the shelf, but **their readers are not implemented yet**.
+- Filename-only search, no content indexing, no permanent document copies.
+- TXT/Markdown source size limit 16 MiB; MathJax HTML page limit about 1.75 MB due to Qt `setHtml` constraints. Large math-heavy documents may require future chunking.
 
 ## Tests
+
+Run:
 
 ```bash
 /usr/bin/python3 -m unittest discover -s tests -v
 ```
 
-Unit tests run without a GUI; the PDF and text reader smoke tests require installed PySide6 and a graphical session. Check PDF selection with the included sample: select some text, confirm a blue overlay appears, and press `Ctrl+C` to test the clipboard.
+The parser and catalog tests run without a graphical desktop. PDF/Qt WebEngine visual rendering must be validated on Debian 13; this archive has not been graphically exercised in this development environment.
 
-## Files
+## Project files
 
-| File | Role |
+| File | Purpose |
 |---|---|
-| `main.py` | Bookshelf UI, scanning, reader dispatch |
-| `pdf_reader.py` | Page navigation + zoom slider + copy button |
-| `pdf_selection.py` | Blue PDF mouse text selection and clipboard |
-| `text_reader.py` | Markdown/TXT native Qt reader |
-| `text_format.py` | Text encoding fallback and memory guard |
-| `catalog.py` | Ten document extensions, names and paths |
-| `book_colors.py` | Book spine colors |
-| `disc_detection.py` | Mounted optical-drive detection |
-| `tests/` | Catalog/reader tests, example files |
+| `main.py` | Bookshelf GUI, folder/disc scanning, reader selection |
+| `pdf_reader.py` + `pdf_selection.py` | PDF rendering and text selection |
+| `text_reader.py` | Lightweight Markdown/TXT reader and on-demand math reader integration |
+| `math_markdown.py` | Safe Markdown-to-HTML conversion and LaTeX delimiter preservation |
+| `markdown_colors.py` | Safe HTML-style inline text-colour support for Markdown |
+| `math_reader.py` | Offline WebEngine view, MathJax integration, network/file restrictions |
+| `catalog.py` + `book_colors.py` | All 10 file types and spine colors |
+| `disc_detection.py` | Mounted optical-disc detection |
+| `tests/fixtures/equations.md` | MathJax demo |
+
+**Important:** MathJax uses locally installed scripts and only app-controlled script configuration. DiscShelf does not run JavaScript provided by files on a CD/DVD.

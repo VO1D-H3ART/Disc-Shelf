@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DiscShelf: manual-launch, offline bookshelf with PDF, Markdown and TXT readers.
+"""DiscShelf: manual-launch, offline bookshelf with PDF, MathJax Markdown and TXT readers.
 
 Debian 13: python3-pyside6.qtwidgets and python3-pyside6.qtpdfwidgets.
 No background process is installed or started by this application.

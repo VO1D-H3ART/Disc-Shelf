@@ -44,6 +44,10 @@ class TextReaderSmokeTests(unittest.TestCase):
         ok, error = reader.open_file(str(fixture / 'sample.txt'), str(fixture))
         self.assertTrue(ok, error)
         self.assertEqual(reader.view.toPlainText().strip(), 'DiscShelf text reader works.')
+        ok, error = reader.open_file(str(fixture / 'colored_notes.md'), str(fixture))
+        self.assertTrue(ok, error)
+        self.assertIn('Coloured Markdown Notes', reader.view.toPlainText())
+        self.assertIn('color:#ff0000', reader.view.toHtml().lower().replace(' ', ''))
         reader.close_file()
         reader.deleteLater()
 
