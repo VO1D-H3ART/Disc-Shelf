@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""DiscShelf first milestone: a manual-launch, in-memory, offline bookshelf.
+"""DiscShelf: manual-launch, offline bookshelf with PDF, Markdown and TXT readers.
 
-Requires Debian 13 package python3-pyside6.qtwidgets.
+Debian 13: python3-pyside6.qtwidgets and python3-pyside6.qtpdfwidgets.
 No background process is installed or started by this application.
 """
 import hashlib
@@ -17,7 +17,7 @@ from PySide6.QtGui import (QColor, QFont, QLinearGradient,
                            QPainter, QPen, QTextLayout, QTextOption)
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
                                QLineEdit, QListView, QMainWindow, QMessageBox,
-                               QPushButton, QStyledItemDelegate, QStyle, QVBoxLayout,
+                               QPushButton, QStackedWidget, QStyledItemDelegate, QStyle, QVBoxLayout,
                                QWidget)
 
 from catalog import Document, document_from_path
@@ -231,10 +231,16 @@ QMainWindow, QWidget { background-color: #211c1a; color: #eee1ca; }
 QLabel#title { color: #f0d2a1; font-size: 24px; font-weight: 700; }
 QLabel#subtitle { color: #bdad96; font-size: 12px; }
 QLabel#fullFilename { color: #e9d1ac; font-size: 13px; padding: 4px 2px; }
+QLabel#readerFilename { color: #f0d2a1; font-size: 15px; font-weight: 650; }
+QLabel#readerInfo { color: #c7b69d; font-size: 12px; }
+QSpinBox { background: #312824; color: #fff2df; border: 1px solid #675241;
+           border-radius: 5px; padding: 5px; min-width: 58px; }
 QPushButton { background: #594535; color: #fff1de; border: 1px solid #7c6144;
               padding: 9px 16px; border-radius: 7px; }
 QPushButton:hover { background: #6a523b; }
 QPushButton:disabled { background: #36302c; color: #82776b; }
+QSlider::groove:horizontal { background: #5b4639; height: 6px; border-radius: 3px; }
+QSlider::handle:horizontal { background: #e7ca97; width: 14px; margin: -5px 0px; border-radius: 7px; }
 QLineEdit { background: #312824; color: #fff2df; border: 1px solid #675241;
             border-radius: 8px; padding: 9px 13px; font-size: 13px; }
 QListView { background: #211c1a; border: 1px solid #44352c; border-radius: 9px; }
@@ -260,6 +266,8 @@ class MainWindow(QMainWindow):
         self.root_kind = None
         self.last_seen_disc = None
         self.pending_disc = None
+        self.pdf_reader = None
+        self.text_reader = None
         self._build_ui()
         self.setStyleSheet(STYLE)
 
@@ -315,6 +323,7 @@ class MainWindow(QMainWindow):
         self.books_view.setMouseTracking(True)
         self.books_view.entered.connect(self.show_book_title)
         self.books_view.clicked.connect(self.show_book_title)
+        self.books_view.clicked.connect(self.open_book_on_click)
         self.books_view.setSelectionMode(QListView.SingleSelection)
         self.books_view.doubleClicked.connect(self.book_clicked)
         root.addWidget(self.books_view, 1)
@@ -331,7 +340,9 @@ class MainWindow(QMainWindow):
         self.counter_label = QLabel('0 books')
         footer.addWidget(self.counter_label)
         root.addLayout(footer)
-        self.setCentralWidget(central)
+        self.page_stack = QStackedWidget(self)
+        self.page_stack.addWidget(central)
+        self.setCentralWidget(self.page_stack)
 
     def choose_directory(self):
         folder = QFileDialog.getExistingDirectory(self, 'Choose a folder or mounted disc')
@@ -351,6 +362,7 @@ class MainWindow(QMainWindow):
         self.counter_label.setText('0 books')
         self.full_filename_label.setText('Hover over a spine to see its full filename.')
         self.full_filename_label.setToolTip('')
+        self.return_to_shelf()
         self.status_label.setText(f'Scanning: {self.root}')
         self.browse_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -407,6 +419,7 @@ class MainWindow(QMainWindow):
         previous = self.last_seen_disc
         self.last_seen_disc = found
         if previous and self.root_kind == 'disc' and previous != found:
+            self.return_to_shelf()
             self.stop_scan()
             self.root = None
             self.root_kind = None
@@ -432,19 +445,71 @@ class MainWindow(QMainWindow):
             self.full_filename_label.setText(book.name)
             self.full_filename_label.setToolTip(book.path)
 
-    def book_clicked(self, proxy_index):
+    def open_book_on_click(self, proxy_index):
+        """Single-click supported spines to open a reader inside DiscShelf."""
         book = proxy_index.data(Qt.UserRole)
         if book is None:
             return
+        if book.extension == '.pdf':
+            self._open_pdf(book)
+        elif book.extension in ('.md', '.txt'):
+            self._open_text(book)
+
+    def _open_pdf(self, book):
+        if self.pdf_reader is None:
+            try:
+                # Qt PDF is optional until a PDF is actually opened.
+                from pdf_reader import PdfReader
+            except ImportError:
+                QMessageBox.warning(
+                    self, 'PDF reader dependency missing',
+                    'Install the Debian 13 Qt PDF package:\n\n'
+                    'sudo apt install python3-pyside6.qtpdfwidgets'
+                )
+                return
+            self.pdf_reader = PdfReader(self)
+            self.pdf_reader.back_requested.connect(self.return_to_shelf)
+            self.page_stack.addWidget(self.pdf_reader)
+        if not self.pdf_reader.open_file(book.path):
+            QMessageBox.warning(self, 'Missing document',
+                                'The document is no longer accessible. Is the disc still inserted?')
+            return
+        self.page_stack.setCurrentWidget(self.pdf_reader)
+
+    def _open_text(self, book):
+        if self.text_reader is None:
+            from text_reader import TextReader
+            self.text_reader = TextReader(self)
+            self.text_reader.back_requested.connect(self.return_to_shelf)
+            self.page_stack.addWidget(self.text_reader)
+        ok, error = self.text_reader.open_file(book.path, allowed_root=self.root)
+        if not ok:
+            QMessageBox.warning(self, 'Unable to read document', error)
+            return
+        self.page_stack.setCurrentWidget(self.text_reader)
+
+    def book_clicked(self, proxy_index):
+        # Double-click still displays a helpful message for formats whose
+        # integrated readers have not been implemented yet.
+        book = proxy_index.data(Qt.UserRole)
+        if book is None or book.extension in ('.pdf', '.md', '.txt'):
+            return
         QMessageBox.information(
             self, book.name,
-            f'{book.name}\n\nType: {book.extension.upper()}\nSource: {book.path}\n\n'
-            'The integrated document readers are the next milestone.\n'
-            'This first build proves the bookshelf and filename scanning.'
+            f'{book.name}\n\nThis build can read PDF, Markdown and TXT files in-app.\n'
+            f'The {book.extension.upper()} reader will be added in a later milestone.'
         )
+
+    def return_to_shelf(self):
+        if self.pdf_reader is not None:
+            self.pdf_reader.close_file()
+        if self.text_reader is not None:
+            self.text_reader.close_file()
+        self.page_stack.setCurrentIndex(0)
 
     def closeEvent(self, event):
         self.disc_timer.stop()
+        self.return_to_shelf()
         self.stop_scan()
         if self.scan_thread is not None:
             self.scan_thread.quit()
