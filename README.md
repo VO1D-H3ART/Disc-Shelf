@@ -1,10 +1,22 @@
-# DiscShelf v9 — All 10 document formats
+# DiscShelf v9.1 — EPUB metadata compatibility fix
 
 **Debian 13 (Trixie)** | Offline bookshelf | **Manual launch** | No resident service
 
 DiscShelf discovers filenames on **already mounted** CDs/DVDs (or an explicitly selected folder) and displays them as colored book spines. Search filters **filenames only**. Files are read on demand when selected. No permanent catalog is written to disk, and the application only polls for mounted optical media *while the window is open*.
 
-## NEW — EPUB reader
+## NEW — EPUB metadata compatibility fix (v9.1)
+
+EPUB 2 NCX and EPUB 3 navigation documents may contain normal XML declarations
+and `<!DOCTYPE ...>` headers. v9 mistakenly rejected these with the message
+“EPUB metadata contains unsupported XML declarations.” v9.1 accepts these
+standard declarations while continuing to reject XML entity declarations and
+external entity expansion via `defusedxml`. No data is fetched from DTD URLs.
+
+This adds one small Debian dependency: `python3-defusedxml`. If it is missing,
+EPUB opening shows an installation instruction rather than preventing DiscShelf
+from launching. The PDF, Markdown, TXT, HTML, and Office readers are unchanged.
+
+## EPUB reader
 
 Green `.epub` spines now open in DiscShelf. The reader provides:
 
@@ -15,7 +27,7 @@ Green `.epub` spines now open in DiscShelf. The reader provides:
 - A background worker that extracts *only renderable* selected-book resources to a **tmpfs** (RAM-backed) directory. The book's ZIP, XML package, and reading order are validated first. All temporary files are deleted when returning to the bookshelf, changing discs, or exiting normally.
 - EPUB ZIP entry limits, no symbolic links or path traversal, and limits on compressed/unpacked sizes to reduce memory exhaustion on older computers.
 
-The original EPUB stays on the disc and is never changed. There is **no additional EPUB dependency** beyond Qt WebEngine, which was already used for HTML and MathJax. The EPUB reader does not use MathJax or run any scripts from a book.
+The original EPUB stays on the disc and is never changed. EPUB metadata parsing also uses the lightweight `python3-defusedxml` package for secure compatibility with standard XML declarations and DOCTYPE headers. The EPUB reader does not use MathJax or run any scripts from a book.
 
 ### Supported formats — complete
 
@@ -39,7 +51,7 @@ From your Debian package repository while online (or use pre-downloaded local pa
 ```bash
 sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtpdfwidgets \
   python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax \
-  libreoffice-writer
+  libreoffice-writer python3-defusedxml
 ```
 
 These are dependencies for the complete application, not services started at login. DiscShelf itself **never needs the internet to open a disc**.
@@ -52,13 +64,13 @@ Extract the ZIP archive. From inside `discshelf-mvp/`:
 /usr/bin/python3 main.py
 ```
 
-To test two bundled sample EPUBs (both have two chapters, a TOC, local color styling, links, and an embedded SVG):
+To test four bundled sample EPUBs (including two with standard DOCTYPE declarations; all have two chapters, a TOC, local color styling, links, and an embedded SVG):
 
 ```bash
 /usr/bin/python3 main.py tests/fixtures/epub_library
 ```
 
-Try `Offline-EPUB3.epub` and `Offline-EPUB2.epub` (both green spines). Verify:
+Try `Offline-EPUB3-DOCTYPE.epub` and `Offline-EPUB2-DOCTYPE.epub` to confirm the v9 XML fix, or the original `Offline-EPUB3.epub` and `Offline-EPUB2.epub`. All appear as green spines. Verify:
 
 1. The chapter title and green styled sentence display properly.
 2. The table of contents includes **Welcome**, **The details**, and **Styling and Navigation**.
@@ -82,7 +94,7 @@ You can also browse other fixtures with `main.py tests/fixtures`.
 python -m unittest discover -s tests -v
 ```
 
-The test suite includes EPUB 2/3 parsing and temporary cleanup, unsafe-path and encrypted archive rejection, previous readers, and real LibreOffice conversion fixtures where available. Qt GUI tests require a graphical Debian session and the PySide6 packages. The release was not visually tested on a physical Debian laptop in the packaging environment; check the UI and EPUB CSS/link rendering on your machine.
+The test suite includes EPUB 2/3 parsing, standard XML DOCTYPE compatibility, malicious XML entity rejection, and temporary cleanup, unsafe-path and encrypted archive rejection, previous readers, and real LibreOffice conversion fixtures where available. Qt GUI tests require a graphical Debian session and the PySide6 packages. The release was not visually tested on a physical Debian laptop in the packaging environment; check the UI and EPUB CSS/link rendering on your machine.
 
 ## Source overview
 

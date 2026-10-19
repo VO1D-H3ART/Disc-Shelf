@@ -19,6 +19,16 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from xml.etree import ElementTree as ET
 
+# EPUB 2 NCX and EPUB 3 XHTML navigation documents may contain legitimate
+# <!DOCTYPE ...> declarations. defusedxml allows those while rejecting XML
+# entity declarations and external entity expansion.
+try:
+    from defusedxml import ElementTree as SafeET
+    from defusedxml.common import DefusedXmlException
+except ImportError:  # Keep the bookshelf usable even before EPUB deps are installed.
+    SafeET = None
+    DefusedXmlException = ()
+
 from office_conversion import ram_temp_root
 
 EPUB_PREFIX = 'discshelf-epub-'
@@ -121,13 +131,18 @@ def _xml_file(book: zipfile.ZipFile, filename: str) -> ET.Element:
         raise EpubError(f'Missing EPUB metadata: {filename}') from exc
     if info.file_size > MAX_XML_BYTES:
         raise EpubError('EPUB XML metadata is unexpectedly large.')
+    if SafeET is None:
+        raise EpubError('EPUB support requires python3-defusedxml. '
+                        'Install it with: sudo apt install python3-defusedxml')
     try:
         data = book.read(info)
-        # No XML DTDs, entities, or external document declarations.
-        upper = data.upper()
-        if b'<!DOCTYPE' in upper or b'<!ENTITY' in upper:
-            raise EpubError('EPUB metadata contains unsupported XML declarations.')
-        return ET.fromstring(data)
+        # Accept normal XML declarations and standard EPUB DOCTYPEs. Never load
+        # external resources, expand entities, or resolve referenced DTDs.
+        return SafeET.fromstring(data, forbid_dtd=False,
+                                 forbid_entities=True, forbid_external=True)
+    except DefusedXmlException as exc:
+        raise EpubError(f'Unsafe XML entity or external reference in EPUB metadata: '
+                        f'{filename}') from exc
     except (ET.ParseError, RuntimeError, OSError, zipfile.BadZipFile) as exc:
         raise EpubError(f'Invalid EPUB metadata: {filename}') from exc
 
