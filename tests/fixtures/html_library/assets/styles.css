@@ -1,0 +1,6 @@
+body {background: #fdfaf4; font-family: sans-serif; color:#292929; margin:25px;}
+main {max-width: 760px; margin: auto;}
+h1 {color: #273f56; border-bottom: 4px solid #e08b35; padding-bottom:8px;}
+table {border-collapse:collapse; margin:15px 0;}
+td,th {border:1px solid #ccc; padding:8px 20px;}
+a {color: #285ab3;}

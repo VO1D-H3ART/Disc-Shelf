@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DiscShelf HTML Reader Test</title>
+<link rel="stylesheet" href="assets/styles.css">
+<style>.inline-css {color:#8140ac; font-weight:bold}</style>
+</head>
+<body>
+<main>
+<h1 id="intro">DiscShelf HTML Test</h1>
+<p>CSS should make this page white with a dark header and an orange accent.</p>
+<p class="inline-css">Inline CSS should color this text purple.</p>
+<img src="assets/disc.svg" alt="Illustration of a disc" width="96" height="96">
+<table><tr><th>Format</th><th>Supported</th></tr><tr><td>HTML</td><td>Yes</td></tr></table>
+<p><a href="Chapter-Two.htm">Go to chapter 2</a></p>
+<p><a href="#intro">Jump back to heading</a></p>
+<p><a href="https://example.com/">External website (must be blocked)</a></p>
+<p><a href="file:///etc/passwd">Host file (must be blocked)</a></p>
+<p id="js-check">JavaScript did not run.</p>
+<script>document.getElementById('js-check').textContent = 'DANGER: JavaScript executed';</script>
+</main>
+</body>
+</html>

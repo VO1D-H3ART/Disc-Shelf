@@ -22,6 +22,7 @@ class PdfReader(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.source_path = None
+        self._source_note = None
         self._last_error_shown = False
         self._password_prompt_open = False
         self._password_attempts = 0
@@ -109,15 +110,17 @@ class PdfReader(QWidget):
         self.view.zoomModeChanged.connect(lambda _value: self._sync_zoom_slider())
         self._update_controls()
 
-    def open_file(self, path: str) -> bool:
+    def open_file(self, path: str, display_name: str | None = None,
+                  source_note: str | None = None) -> bool:
         """Return False if the source is unavailable before attempting load."""
         self.close_file()
         if not Path(path).is_file():
             return False
         self.source_path = path
-        self.filename.setText(Path(path).name)
-        self.filename.setToolTip(path)
-        self.info.setText('Opening PDF directly from disc…')
+        self._source_note = source_note
+        self.filename.setText(display_name or Path(path).name)
+        self.filename.setToolTip(display_name or path)
+        self.info.setText('Opening preview from RAM…' if source_note else 'Opening PDF directly from disc…')
         self._last_error_shown = False
         self._password_attempts = 0
         self.document.setPassword('')
@@ -132,6 +135,7 @@ class PdfReader(QWidget):
     def close_file(self):
         """Release the optical file when returning to the shelf / ejecting."""
         self.source_path = None
+        self._source_note = None
         self.view.reset_document_state()
         self.document.close()
         self.document.setPassword('')
@@ -148,7 +152,8 @@ class PdfReader(QWidget):
             return
         if status == QPdfDocument.Status.Ready:
             pages = self.document.pageCount()
-            self.info.setText(f'{pages:,} page' + ('s' if pages != 1 else '') + ' • reading directly from disc')
+            self.info.setText(f'{pages:,} page' + ('s' if pages != 1 else '') +
+                              ' • ' + (self._source_note or 'reading directly from disc'))
             self._update_controls()
             QTimer.singleShot(0, self._sync_zoom_slider)
         elif status == QPdfDocument.Status.Loading:

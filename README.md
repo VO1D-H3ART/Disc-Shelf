@@ -1,122 +1,95 @@
-# DiscShelf v6 — Coloured Markdown + Offline MathJax
+# DiscShelf v9 — All 10 document formats
 
-DiscShelf is a **manual-launch, fully offline** CD/DVD bookshelf for Debian 13. It scans **filenames only**, draws coloured book spines, and opens supported documents without launching external viewers. There is **no autostart, background daemon, document database, or network access**.
+**Debian 13 (Trixie)** | Offline bookshelf | **Manual launch** | No resident service
 
-## v6: Inline Markdown text colours (FIX)
+DiscShelf discovers filenames on **already mounted** CDs/DVDs (or an explicitly selected folder) and displays them as colored book spines. Search filters **filenames only**. Files are read on demand when selected. No permanent catalog is written to disk, and the application only polls for mounted optical media *while the window is open*.
 
-Inline HTML-style `<span>` text colours now render as actual colours, **not literal tags**, in both Markdown readers:
+## NEW — EPUB reader
 
-```markdown
-This is <span style="color: red">red text</span>.
-This is <span style="color: #4f46e5">indigo text</span>.
-And this is <span style="color: forestgreen">**bold green text**</span>.
-```
+Green `.epub` spines now open in DiscShelf. The reader provides:
 
-Supports named CSS colours, hex colours (`#RGB`, `#RRGGBB`, etc.) and basic `rgb()`/`hsl()` colour values. Other inline style properties and HTML attributes are deliberately discarded. Arbitrary source HTML, including `<script>` tags, continues to display as inert, escaped text for safety. Document-supplied JS cannot execute.
+- EPUB 2 (NCX) and EPUB 3 (navigation XHTML) table of contents, with indented nested sections.
+- **Previous chapter** / **Next chapter** buttons, a clickable table of contents, a zoom slider (50–200%), text selection and Ctrl+C.
+- Styled XHTML/HTML pages, embedded images, local CSS and fonts; internal chapter links and anchor links.
+- Fully local viewing with **JavaScript disabled**, request interception for all non-book files/network resources, and an anonymous **in-memory-only WebEngine profile**.
+- A background worker that extracts *only renderable* selected-book resources to a **tmpfs** (RAM-backed) directory. The book's ZIP, XML package, and reading order are validated first. All temporary files are deleted when returning to the bookshelf, changing discs, or exiting normally.
+- EPUB ZIP entry limits, no symbolic links or path traversal, and limits on compressed/unpacked sizes to reduce memory exhaustion on older computers.
 
-**Lightweight by default:** a Markdown file with colours but *without mathematics* uses the native Qt reader rather than starting Qt WebEngine. Math-containing files use the existing offline MathJax reader, now with coloured text too.
+The original EPUB stays on the disc and is never changed. There is **no additional EPUB dependency** beyond Qt WebEngine, which was already used for HTML and MathJax. The EPUB reader does not use MathJax or run any scripts from a book.
 
-For a quick test:
+### Supported formats — complete
 
-```bash
-/usr/bin/python3 main.py tests/fixtures
-```
+| Extension | Book spine | Integrated reader |
+|---|---|---|
+| `.pdf` | Red | Qt PDF, zoom and selection |
+| `.doc`, `.docx` | Blue | LibreOffice Writer → RAM-based PDF preview |
+| `.md` | Purple | Native Markdown or offline MathJax for math; colored spans |
+| `.html`, `.htm` | Teal | Offline HTML/CSS, no document JavaScript |
+| `.txt` | Slate | Selectable native text reader |
+| `.rtf` | Copper | LibreOffice Writer → RAM-based PDF preview |
+| `.odt` | Ocean blue | LibreOffice Writer → RAM-based PDF preview |
+| `.epub` | Green | **EPUB 2/3 chapters and table of contents** |
 
-Click `colored_notes.md` to test the native Markdown renderer and `equations.md` to test MathJax plus inline coloured text. No additional packages are required if v5 dependencies were installed.
+All **10 extensions** now have integrated readers.
 
-## Mathematical equations in Markdown
+## Install dependencies (Debian 13)
 
-The Markdown reader also recognizes and typesets:
-
-- Inline `$E=mc^2$` and `\(E=mc^2\)`
-- Display math between `$$...$$` or `\[...\]` (including multiline equations)
-- Common LaTeX such as `\frac`, `\sqrt`, `\int`, `\sum`, Greek letters, and superscripts/subscripts
-- Regular Markdown headings, lists, tables, fenced code blocks, images, bold and italic alongside math
-
-**Code blocks are preserved:** `$$...$$` appearing inside a fenced code block or inline backticks is shown as code, not rendered as an equation. Markdown filenames and the bookshelf behave exactly as in v4.
-
-**Fully offline:** MathJax is loaded **from Debian's installed files** (`/usr/share/javascript/mathjax/MathJax.js`), not from a CDN. All HTTP/HTTPS/network requests from its Markdown page are blocked. Markdown HTML is escaped to prevent scripts from a DVD running. Only *application-controlled* JavaScript is enabled in the MathJax reader because MathJax itself requires it; the planned HTML reader will remain HTML/CSS-only, with disc JavaScript disabled.
-
-**Memory-conscious:** Markdown without real equations continues to use the lightweight native Qt text reader. Qt WebEngine starts only if a Markdown document contains supported math. The browser is disposable and uses a private, off-the-record profile with no disk cache/cookies. MathJax rendering will use more RAM than the regular Markdown reader, so test on your 4 GB laptop.
-
-## Installing on Debian 13
-
-If you already installed the PDF and Qt Widget dependencies for v4, the new dependencies are:
-
-```bash
-sudo apt install python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax
-```
-
-For a fresh install of DiscShelf's currently implemented readers:
+From your Debian package repository while online (or use pre-downloaded local packages):
 
 ```bash
 sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtpdfwidgets \
-  python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax
+  python3-pyside6.qtwebenginewidgets python3-markdown-it libjs-mathjax \
+  libreoffice-writer
 ```
 
-These can be installed via Debian's normal package manager before disconnecting from the internet. Once installed, **DiscShelf never needs internet access** to run or render equations. No Node.js service and no CDN are used.
+These are dependencies for the complete application, not services started at login. DiscShelf itself **never needs the internet to open a disc**.
 
-## Run / test
+## Run
 
-Extract this ZIP and, in `discshelf-mvp/`, run:
-
-```bash
-/usr/bin/python3 main.py tests/fixtures
-```
-
-Click **equations.md** (purple spine). Expected examples include an inline equation (`E = mc²`) and a displayed integral and infinite sum. A file with ordinary Markdown and no equations keeps the v4 native reader. PDF/TXT features are unchanged.
-
-To scan a folder or already-mounted CD/DVD:
-
-```bash
-/usr/bin/python3 main.py ~/Documents
-```
-
-Without a path, launch manually using:
+Extract the ZIP archive. From inside `discshelf-mvp/`:
 
 ```bash
 /usr/bin/python3 main.py
 ```
 
-Optical-disc detection only runs while this window is open. Debian must already mount the disc; automatic mounting is not implemented yet.
-
-**If the equation reader displays a blank screen on very old graphics hardware:** try software rendering:
+To test two bundled sample EPUBs (both have two chapters, a TOC, local color styling, links, and an embedded SVG):
 
 ```bash
-QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu /usr/bin/python3 main.py tests/fixtures
+/usr/bin/python3 main.py tests/fixtures/epub_library
 ```
 
-## Readers and file types
+Try `Offline-EPUB3.epub` and `Offline-EPUB2.epub` (both green spines). Verify:
 
-- PDF: integrated Qt PDF viewer, page navigation, zoom slider, text selection/copy.
-- MD: native Qt viewer for ordinary Markdown; MathJax in a locked-down local WebEngine for math-containing Markdown.
-- TXT: native selectable and copyable plain-text viewer.
-- The remaining seven extensions (`.doc`, `.docx`, `.html`, `.htm`, `.rtf`, `.odt`, `.epub`) appear on the shelf, but **their readers are not implemented yet**.
-- Filename-only search, no content indexing, no permanent document copies.
-- TXT/Markdown source size limit 16 MiB; MathJax HTML page limit about 1.75 MB due to Qt `setHtml` constraints. Large math-heavy documents may require future chunking.
+1. The chapter title and green styled sentence display properly.
+2. The table of contents includes **Welcome**, **The details**, and **Styling and Navigation**.
+3. Previous/Next chapter and TOC links work, including chapters with anchors.
+4. The zoom slider changes the text size; selecting and copying text works.
+5. Back to bookshelf cleans up the temporary book.
+
+You can also browse other fixtures with `main.py tests/fixtures`.
+
+## Resource and compatibility limits
+
+- EPUB archives up to **256 MiB compressed**, **384 MiB of extracted eligible resources**, **4,000 ZIP entries**, and **64 MiB per renderable resource**. These limits are deliberate for 4 GB laptops. Extraction uses RAM-backed tmpfs only, and is cancelled when leaving or closing the app. Large or damaged books will display a friendly error rather than trying to use all available RAM.
+- The reader supports ordinary, **unprotected EPUB 2/3 books**. DRM/encrypted/obfuscated resources, interactive JavaScript books, media overlays, embedded audio/video, and complex EPUB fixed-layout semantics are not supported in v9. Most reflowable text-based ebooks should display well, though rendering is not guaranteed to exactly match every publisher's preferred application.
+- The app uses `/run/user/$UID` or `/dev/shm` **only if verified as tmpfs**. If neither exists it will refuse EPUB extraction rather than silently writing document contents to a persistent `/tmp` directory. Note: the Linux kernel may swap tmpfs pages if swapping is enabled; DiscShelf never explicitly stores a persistent copy.
+- The PDF / HTML / Markdown / TXT / Word readers retain their previous behavior. For Office files, LibreOffice must be installed; its conversion has some font/layout limitations. The LibreOffice subprocess is not yet placed in a kernel-enforced network sandbox.
+- **Automatic mounting is still planned.** This release detects optical discs that Debian has *already mounted*, or you can select a folder manually. It does not start a background daemon or autostart when a disc is inserted.
 
 ## Tests
 
-Run:
-
 ```bash
-/usr/bin/python3 -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
-The parser and catalog tests run without a graphical desktop. PDF/Qt WebEngine visual rendering must be validated on Debian 13; this archive has not been graphically exercised in this development environment.
+The test suite includes EPUB 2/3 parsing and temporary cleanup, unsafe-path and encrypted archive rejection, previous readers, and real LibreOffice conversion fixtures where available. Qt GUI tests require a graphical Debian session and the PySide6 packages. The release was not visually tested on a physical Debian laptop in the packaging environment; check the UI and EPUB CSS/link rendering on your machine.
 
-## Project files
+## Source overview
 
-| File | Purpose |
-|---|---|
-| `main.py` | Bookshelf GUI, folder/disc scanning, reader selection |
-| `pdf_reader.py` + `pdf_selection.py` | PDF rendering and text selection |
-| `text_reader.py` | Lightweight Markdown/TXT reader and on-demand math reader integration |
-| `math_markdown.py` | Safe Markdown-to-HTML conversion and LaTeX delimiter preservation |
-| `markdown_colors.py` | Safe HTML-style inline text-colour support for Markdown |
-| `math_reader.py` | Offline WebEngine view, MathJax integration, network/file restrictions |
-| `catalog.py` + `book_colors.py` | All 10 file types and spine colors |
-| `disc_detection.py` | Mounted optical-disc detection |
-| `tests/fixtures/equations.md` | MathJax demo |
-
-**Important:** MathJax uses locally installed scripts and only app-controlled script configuration. DiscShelf does not run JavaScript provided by files on a CD/DVD.
+- `main.py`: bookshelf and integrated reader routing
+- `epub_archive.py`: EPUB2/3 metadata, safe archive handling and RAM extraction
+- `epub_loading.py`: cancellable background book preparation
+- `epub_reader.py`: table of contents, chapter navigation, offline Qt rendering
+- `html_reader.py` / `html_policy.py`: shared offline WebEngine policy, including EPUB `.xhtml`
+- `office_conversion.py`: shared tmpfs verification and Office PDF converter
+- `tests/fixtures/epub_library/`: example EPUB2 and EPUB3 books
