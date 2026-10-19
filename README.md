@@ -1,14 +1,15 @@
 # DiscShelf — Debian 13 bookshelf prototype
 
-This is **milestone 1**, not the complete reader application.
+This is **milestone 1, revised bookshelf edition**, not the complete reader application.
 
 ## Features now
-- A native Qt bookshelf with filename-labelled colored book spines.
+- A native Qt bookshelf with taller, wider filename-labelled book spines. Titles wrap onto multiple rotated lines; longer titles automatically use smaller text. Extremely long names use a visible ellipsis, and hovering/clicking any book reveals its full filename below the shelf (also in the tooltip).
 - Filename-only, case-insensitive searching across 10 extensions:
   `.pdf`, `.docx`, `.doc`, `.md`, `.html`, `.htm`, `.txt`, `.rtf`, `.odt`, `.epub`.
 - Recursive directory scanning on a worker thread (no required folder structure).
 - Detection of **already mounted** CD/DVD media on launch and when inserted while the app runs.
 - A manual 'Choose folder / mounted disc' button for testing and for optical media not auto-mounted by Debian.
+- Book colors are based on document type: PDF red, DOC/DOCX blue, Markdown purple, HTML/HTM teal, TXT slate, RTF copper, ODT ocean blue, EPUB green.
 - No files copied to the hard disk; the catalog exists in memory only.
 - No network calls or services, no app autostart or background process when closed.
 

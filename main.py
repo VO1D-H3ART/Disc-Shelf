@@ -12,15 +12,16 @@ from pathlib import Path
 
 from PySide6.QtCore import (QAbstractListModel, QModelIndex, QObject,
                             QSortFilterProxyModel, Qt, QThread, QTimer,
-                            QSize, QRect, Signal, Slot)
-from PySide6.QtGui import (QColor, QFont, QFontMetrics, QLinearGradient,
-                           QPainter, QPen)
+                            QSize, QRect, QPointF, Signal, Slot)
+from PySide6.QtGui import (QColor, QFont, QLinearGradient,
+                           QPainter, QPen, QTextLayout, QTextOption)
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
                                QLineEdit, QListView, QMainWindow, QMessageBox,
                                QPushButton, QStyledItemDelegate, QStyle, QVBoxLayout,
                                QWidget)
 
 from catalog import Document, document_from_path
+from book_colors import spine_color
 from disc_detection import mounted_optical_discs
 
 
@@ -109,17 +110,70 @@ class BooksModel(QAbstractListModel):
 
 
 class BookshelfDelegate(QStyledItemDelegate):
-    COLORS = {
-        '.pdf': '#964b51',
-        '.doc': '#37678a', '.docx': '#37678a',
-        '.md': '#a56e43', '.txt': '#87765f',
-        '.htm': '#477c78', '.html': '#477c78',
-        '.rtf': '#7b617c', '.odt': '#5e688e',
-        '.epub': '#617c51',
-    }
+    """Draw book spines without generating thumbnails or reading file contents.
+
+    Spine titles wrap into multiple rotated lines. Short titles use a legible
+    10-point font, while long ones gradually shrink. Names that physically
+    cannot fit have a visible ellipsis, never a clipped final line; their full
+    spelling is always available by hovering a book (and in its tooltip).
+    """
+    CELL_WIDTH = 113
+    CELL_HEIGHT = 315
 
     def sizeHint(self, option, index):
-        return QSize(91, 230)
+        return QSize(self.CELL_WIDTH, self.CELL_HEIGHT)
+
+    @staticmethod
+    def _layout_text(title, line_width, max_lines_height):
+        """Fit all ordinary-length titles using word/character wrapping.
+
+        Returns a QTextLayout whose lines are positioned and guaranteed to fit
+        within max_lines_height. Extraordinarily long file names are shortened
+        with an explicit ellipsis at a minimum legible font size.
+        """
+        def create_layout(text, points):
+            font = QFont('DejaVu Sans', points, QFont.DemiBold)
+            option = QTextOption()
+            option.setAlignment(Qt.AlignHCenter)
+            option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+            layout = QTextLayout(text, font)
+            layout.setTextOption(option)
+            y = 0.0
+            layout.beginLayout()
+            while True:
+                line = layout.createLine()
+                if not line.isValid():
+                    break
+                line.setLineWidth(line_width)
+                line.setPosition(QPointF(0, y))
+                y += line.height()
+            layout.endLayout()
+            return layout, y
+
+        for points in (10, 9, 8, 7):
+            layout, used = create_layout(title, points)
+            if used <= max_lines_height:
+                return layout, used
+
+        # Rare pathological filenames (e.g. >150 characters) cannot be drawn
+        # legibly in their entirety on a physical-width spine. Never silently
+        # clip: use an ellipsis and show the exact title below on hover.
+        # Binary search makes this cheap even for 255-character filenames.
+        low, high = 0, len(title)
+        best = None
+        best_height = 0.0
+        while low <= high:
+            mid = (low + high) // 2
+            candidate = title[:mid] + '…'
+            layout, used = create_layout(candidate, 7)
+            if used <= max_lines_height:
+                best, best_height = layout, used
+                low = mid + 1
+            else:
+                high = mid - 1
+        if best is None:
+            return create_layout('…', 7)
+        return best, best_height
 
     def paint(self, painter, option, index):
         book = index.data(Qt.UserRole)
@@ -127,18 +181,19 @@ class BookshelfDelegate(QStyledItemDelegate):
             return
         rect = option.rect
         digest = hashlib.blake2b(book.path.encode('utf-8', 'replace'), digest_size=3).digest()
-        width = 47 + digest[0] % 18
-        height = 149 + digest[1] % 35
-        shelf_y = rect.bottom() - 19
+        width = 70 + digest[0] % 11
+        height = 236 + digest[1] % 34
+        shelf_y = rect.bottom() - 20
         left = rect.left() + (rect.width() - width) // 2
         top = shelf_y - height - 4
         spine = QRect(left, top, width, height)
-        base = QColor(self.COLORS.get(book.extension, '#655e59'))
+        base = QColor(spine_color(book.extension))
 
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
         painter.fillRect(rect, QColor('#211c1a'))
-        # One continuous shelf strip across every item in each row.
+        # Continuous wooden shelf along each row.
         painter.fillRect(QRect(rect.left(), shelf_y - 3, rect.width(), 4), QColor('#120e0c'))
         painter.fillRect(QRect(rect.left(), shelf_y, rect.width(), 14), QColor('#94683f'))
         painter.fillRect(QRect(rect.left(), shelf_y + 13, rect.width(), 6), QColor('#51341f'))
@@ -154,17 +209,20 @@ class BookshelfDelegate(QStyledItemDelegate):
         painter.setPen(QPen(base.darker(185), 1))
         painter.setBrush(gradient)
         painter.drawRoundedRect(spine, 3, 3)
-        painter.fillRect(QRect(left+3, top+7, width-6, 2), QColor('#d8b98c'))
-        painter.fillRect(QRect(left+3, top+height-12, width-6, 2), QColor('#d8b98c'))
-        # Rotated filename, clipped to available spine height.
-        painter.translate(left + width / 2, top + height - 19)
+        painter.fillRect(QRect(left + 3, top + 7, width - 6, 2), QColor('#d8b98c'))
+        painter.fillRect(QRect(left + 3, top + height - 12, width - 6, 2), QColor('#d8b98c'))
+
+        # Paint text rotated bottom-to-top. Unlike the original prototype,
+        # it wraps across the spine width rather than forcibly clipping to
+        # a single line of text.
+        margin = 9
+        available_length = height - 36
+        available_thickness = width - 2 * margin
+        layout, used_height = self._layout_text(book.title, available_length, available_thickness)
+        painter.translate(left + margin, top + height - 19)
         painter.rotate(-90)
-        text_font = QFont('Sans Serif', 9, QFont.DemiBold)
-        painter.setFont(text_font)
-        painter.setPen(QColor('#fbecce'))
-        title = book.title
-        title = QFontMetrics(text_font).elidedText(title, Qt.ElideRight, height - 45)
-        painter.drawText(QRect(0, -11, height - 42, 22), Qt.AlignVCenter | Qt.AlignHCenter, title)
+        painter.setPen(QColor('#FFF2DE'))
+        layout.draw(painter, QPointF(0, (available_thickness - used_height) / 2))
         painter.restore()
 
 
@@ -172,6 +230,7 @@ STYLE = """
 QMainWindow, QWidget { background-color: #211c1a; color: #eee1ca; }
 QLabel#title { color: #f0d2a1; font-size: 24px; font-weight: 700; }
 QLabel#subtitle { color: #bdad96; font-size: 12px; }
+QLabel#fullFilename { color: #e9d1ac; font-size: 13px; padding: 4px 2px; }
 QPushButton { background: #594535; color: #fff1de; border: 1px solid #7c6144;
               padding: 9px 16px; border-radius: 7px; }
 QPushButton:hover { background: #6a523b; }
@@ -251,11 +310,21 @@ class MainWindow(QMainWindow):
         self.books_view.setMovement(QListView.Static)
         self.books_view.setUniformItemSizes(True)
         self.books_view.setSpacing(0)
-        self.books_view.setGridSize(QSize(91, 230))
-        self.books_view.setWordWrap(False)
+        self.books_view.setGridSize(QSize(BookshelfDelegate.CELL_WIDTH, BookshelfDelegate.CELL_HEIGHT))
+        self.books_view.setWordWrap(True)
+        self.books_view.setMouseTracking(True)
+        self.books_view.entered.connect(self.show_book_title)
+        self.books_view.clicked.connect(self.show_book_title)
         self.books_view.setSelectionMode(QListView.SingleSelection)
         self.books_view.doubleClicked.connect(self.book_clicked)
         root.addWidget(self.books_view, 1)
+        # Exact, selectable filename always appears here on hover/click, even
+        # for names too long to fit physically onto a book spine.
+        self.full_filename_label = QLabel('Hover over a spine to see its full filename.')
+        self.full_filename_label.setObjectName('fullFilename')
+        self.full_filename_label.setWordWrap(True)
+        self.full_filename_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        root.addWidget(self.full_filename_label)
         footer = QHBoxLayout()
         self.status_label = QLabel('Insert a disc or choose a folder to see your library.')
         footer.addWidget(self.status_label, 1)
@@ -280,6 +349,8 @@ class MainWindow(QMainWindow):
         self.model.clear()
         self.search_box.clear()
         self.counter_label.setText('0 books')
+        self.full_filename_label.setText('Hover over a spine to see its full filename.')
+        self.full_filename_label.setToolTip('')
         self.status_label.setText(f'Scanning: {self.root}')
         self.browse_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -342,6 +413,8 @@ class MainWindow(QMainWindow):
             if self.scan_thread is None:
                 self.model.clear()
                 self.counter_label.setText('0 books')
+            self.full_filename_label.setText('Hover over a spine to see its full filename.')
+            self.full_filename_label.setToolTip('')
             self.status_label.setText('Disc removed. Insert another or choose a folder.')
         if found:
             if self.scan_thread is not None:
@@ -351,6 +424,13 @@ class MainWindow(QMainWindow):
                 self.begin_scan(found, 'disc')
         else:
             self.pending_disc = None
+
+    @Slot(QModelIndex)
+    def show_book_title(self, proxy_index):
+        book = proxy_index.data(Qt.UserRole)
+        if book is not None:
+            self.full_filename_label.setText(book.name)
+            self.full_filename_label.setToolTip(book.path)
 
     def book_clicked(self, proxy_index):
         book = proxy_index.data(Qt.UserRole)
