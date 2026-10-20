@@ -6,7 +6,7 @@ import unittest
 try:
     from PySide6.QtWidgets import QApplication
     from PySide6.QtPdf import QPdfDocument
-    from pdf_reader import PdfReader
+    from pdf_reader import PdfReader, PageNumberSpin
     HAS_QT = True
 except ImportError:
     HAS_QT = False
@@ -20,6 +20,35 @@ class PdfReaderSmokeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_editable_page_selector_with_reversed_arrows(self):
+        selector = PageNumberSpin()
+        selector.setRange(1, 18)
+        selector.setValue(3)
+        self.assertTrue(selector.decrease_button.isEnabled())
+        self.assertTrue(selector.increase_button.isEnabled())
+
+        selector.decrease_button.click()  # ▲ decreases
+        self.assertEqual(selector.value(), 2)
+        selector.increase_button.click()  # ▼ increases
+        self.assertEqual(selector.value(), 3)
+
+        selector.stepBy(1)  # Keyboard Up / wheel up decreases
+        self.assertEqual(selector.value(), 2)
+        selector.stepBy(-1)  # Keyboard Down / wheel down increases
+        self.assertEqual(selector.value(), 3)
+
+        selector.lineEdit().setText('12')  # Type page directly
+        selector.interpretText()  # Same validation used on Enter
+        self.assertEqual(selector.value(), 12)
+
+        selector.setValue(1)
+        self.assertFalse(selector.decrease_button.isEnabled())
+        self.assertTrue(selector.increase_button.isEnabled())
+        selector.setValue(18)
+        self.assertTrue(selector.decrease_button.isEnabled())
+        self.assertFalse(selector.increase_button.isEnabled())
+        selector.deleteLater()
 
     def test_local_three_page_pdf(self):
         source = Path(__file__).parent / 'fixtures' / 'sample.pdf'

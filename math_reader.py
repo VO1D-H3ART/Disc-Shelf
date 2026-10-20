@@ -2,7 +2,7 @@
 
 Qt WebEngine is imported only for Markdown containing valid math delimiters.
 No scripts or HTML from the DVD execute: markdown-it disables raw HTML.
-The only executable script comes from the locally installed Debian MathJax.
+The only executable script comes from the locally installed MathJax.
 """
 from pathlib import Path
 
@@ -15,8 +15,14 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from math_markdown import make_math_page
 
-# Debian 13: package libjs-mathjax
-MATHJAX_FILE = Path('/usr/share/javascript/mathjax/MathJax.js')
+# Debian uses MathJax 2; Arch ships MathJax 4. No CDN or network fallback.
+MATHJAX_CANDIDATES = (
+    Path('/usr/share/javascript/mathjax/MathJax.js'),  # Debian libjs-mathjax
+    Path('/usr/share/mathjax/tex-svg.js'),              # Arch mathjax (v4)
+    Path('/usr/share/mathjax/MathJax.js'),              # older Arch MathJax 2
+    Path('/usr/share/mathjax2/MathJax.js'),
+)
+MATHJAX_FILE = next((p for p in MATHJAX_CANDIDATES if p.is_file()), MATHJAX_CANDIDATES[0])
 ALLOWED_IMAGE_TYPES = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'}
 
 
@@ -68,7 +74,7 @@ class LockedMathPage(QWebEnginePage):
 def create_math_view(fragment: str, source_path: Path, disc_root: Path, parent=None):
     """Create a disposable view with a private, memory-only WebEngine profile."""
     if not MATHJAX_FILE.is_file():
-        raise RuntimeError('Missing local MathJax. Install libjs-mathjax on Debian 13.')
+        raise RuntimeError('Missing local MathJax: install mathjax (Arch) or libjs-mathjax (Debian).')
 
     view = QWebEngineView(parent)
     # No storageName means the profile is off-the-record (no persistent cache).

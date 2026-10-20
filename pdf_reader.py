@@ -11,9 +11,79 @@ from PySide6.QtCore import QEvent, QPointF, QTimer, Qt, Signal, Slot
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtWidgets import (
-    QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget,
+    QAbstractSpinBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox,
+    QPushButton, QSlider, QSpinBox, QToolButton, QVBoxLayout, QWidget,
 )
+
+
+class PageNumberSpin(QSpinBox):
+    """Editable page field with explicit, reversed page-navigation arrows.
+
+    The upper arrow navigates toward page 1; the lower arrow toward the last
+    page. The arrow keys and wheel use the same directions. This deliberately
+    differs from QSpinBox's normal numeric stepping.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName('pdfPageSpin')
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.setKeyboardTracking(False)  # Allow replacing 1 with e.g. 150 before jumping.
+        self.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self.setMinimumWidth(96)
+        self.setFixedHeight(38)
+        self.lineEdit().setTextMargins(0, 0, 26, 0)
+        self.setStyleSheet("""
+            QSpinBox#pdfPageSpin {
+                background: #312824; color: #fff2df;
+                border: 1px solid #806347; border-radius: 6px;
+                padding: 3px 4px 3px 10px; font-size: 13px;
+            }
+            QToolButton#pdfPageUp, QToolButton#pdfPageDown {
+                background: #534035; color: #f3ddc0;
+                border: 0; border-radius: 2px;
+                font-size: 10px; font-weight: 700; padding: 0;
+            }
+            QToolButton#pdfPageUp:hover, QToolButton#pdfPageDown:hover {
+                background: #795a40;
+            }
+            QToolButton#pdfPageUp:disabled, QToolButton#pdfPageDown:disabled {
+                background: #3b322d; color: #756558;
+            }
+        """)
+
+        self.decrease_button = QToolButton(self)
+        self.decrease_button.setObjectName('pdfPageUp')
+        self.decrease_button.setText('▲')
+        self.decrease_button.setToolTip('Previous page (decrease page number)')
+        self.decrease_button.setAccessibleName('Decrease page number')
+        self.decrease_button.clicked.connect(lambda: self.setValue(self.value() - 1))
+
+        self.increase_button = QToolButton(self)
+        self.increase_button.setObjectName('pdfPageDown')
+        self.increase_button.setText('▼')
+        self.increase_button.setToolTip('Next page (increase page number)')
+        self.increase_button.setAccessibleName('Increase page number')
+        self.increase_button.clicked.connect(lambda: self.setValue(self.value() + 1))
+
+        self.valueChanged.connect(self.refresh_arrows)
+        self.refresh_arrows()
+
+    def stepBy(self, steps):
+        # Reverse keyboard Up/Down and mouse wheel, too.
+        super().stepBy(-steps)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        button_width = 21
+        x = self.width() - button_width - 4
+        half = (self.height() - 6) // 2
+        self.decrease_button.setGeometry(x, 3, button_width, half)
+        self.increase_button.setGeometry(x, 3 + half, button_width, half)
+
+    def refresh_arrows(self, *_args):
+        self.decrease_button.setEnabled(self.isEnabled() and self.value() > self.minimum())
+        self.increase_button.setEnabled(self.isEnabled() and self.value() < self.maximum())
 
 
 class PdfReader(QWidget):
@@ -44,10 +114,7 @@ class PdfReader(QWidget):
         root.addLayout(top)
 
         controls = QHBoxLayout()
-        self.prev_button = QPushButton('◀ Previous')
-        self.next_button = QPushButton('Next ▶')
-        controls.addWidget(self.prev_button)
-        self.page_spin = QSpinBox()
+        self.page_spin = PageNumberSpin()
         self.page_spin.setMinimum(1)
         self.page_spin.setMaximum(1)
         self.page_spin.setToolTip('Go to page')
@@ -97,8 +164,6 @@ class PdfReader(QWidget):
         self.document.statusChanged.connect(self._status_changed)
         self.document.passwordRequired.connect(self._request_password)
 
-        self.prev_button.clicked.connect(lambda: self._go_relative(-1))
-        self.next_button.clicked.connect(lambda: self._go_relative(1))
         self.page_spin.valueChanged.connect(self._go_to_page)
         self.zoom_in.clicked.connect(lambda: self._change_zoom(1.25))
         self.zoom_out.clicked.connect(lambda: self._change_zoom(0.8))
@@ -225,17 +290,13 @@ class PdfReader(QWidget):
         self.page_spin.setValue(min(max(1, current + 1), max(1, pages)))
         self.page_spin.blockSignals(False)
         self.page_total.setText(f'of {pages:,}')
-        self.prev_button.setEnabled(ready and current > 0)
-        self.next_button.setEnabled(ready and current < pages - 1)
         self.page_spin.setEnabled(ready)
+        self.page_spin.refresh_arrows()
         self.zoom_in.setEnabled(ready)
         self.zoom_out.setEnabled(ready)
         self.fit_width.setEnabled(ready)
         self.zoom_slider.setEnabled(ready)
         self.copy_button.setEnabled(ready and bool(self.view.selected_text()))
-
-    def _go_relative(self, delta):
-        self._go_to_page(self.navigator.currentPage() + delta + 1)
 
     def _go_to_page(self, one_based_page):
         if self.document.status() != QPdfDocument.Status.Ready:

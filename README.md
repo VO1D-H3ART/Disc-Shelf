@@ -1,10 +1,21 @@
-# DiscShelf v9.1 — EPUB metadata compatibility fix
+# DiscShelf v9.2 — Compact PDF page navigation
 
 **Debian 13 (Trixie)** | Offline bookshelf | **Manual launch** | No resident service
 
 DiscShelf discovers filenames on **already mounted** CDs/DVDs (or an explicitly selected folder) and displays them as colored book spines. Search filters **filenames only**. Files are read on demand when selected. No permanent catalog is written to disk, and the application only polls for mounted optical media *while the window is open*.
 
-## NEW — EPUB metadata compatibility fix (v9.1)
+## NEW — PDF navigation improvements (v9.2)
+
+The standalone Previous page button has been removed. The PDF page number
+field remains directly editable: type a number and press Enter to jump there.
+Its two small in-field buttons now show clear arrows: **▲ decreases** the page
+number and **▼ increases** the page number. Keyboard Up/Down and wheel stepping
+are reversed consistently. Arrows are disabled at the first/last page.
+
+This release also retains the EPUB XML metadata compatibility improvements
+introduced in v9.1.
+
+## EPUB metadata compatibility fix (v9.1)
 
 EPUB 2 NCX and EPUB 3 navigation documents may contain normal XML declarations
 and `<!DOCTYPE ...>` headers. v9 mistakenly rejected these with the message

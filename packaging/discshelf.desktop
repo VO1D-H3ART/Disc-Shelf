@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DiscShelf
+GenericName=Offline document bookshelf
+Comment=Browse and read documents from a CD or DVD
+Exec=discshelf
+Icon=discshelf
+Terminal=false
+Categories=Office;Viewer;
+StartupNotify=true
