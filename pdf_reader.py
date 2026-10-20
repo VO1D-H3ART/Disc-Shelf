@@ -130,6 +130,7 @@ class PdfReader(QWidget):
         self.zoom_slider.setPageStep(25)
         self.zoom_slider.setValue(100)
         self.zoom_slider.setFixedWidth(150)
+        self.zoom_slider.setMinimumHeight(24)  # Prevent handle clipping above the groove.
         self.zoom_slider.setToolTip('Zoom: 25% to 400%')
         self.zoom_label = QLabel('100%')
         self.zoom_label.setMinimumWidth(48)

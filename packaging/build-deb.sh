@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a Debian package for DiscShelf v9.2 without PyInstaller or pip.
+# Build a Debian package for DiscShelf v0.9.3 without PyInstaller or pip.
 # Usage: ./packaging/build-deb.sh [output_directory]
 set -euo pipefail
 
@@ -10,7 +10,7 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 PACKAGE='discshelf'
-VERSION='0.9.2-1'
+VERSION='0.9.3-1'
 ARCH='all'
 OUTPUT="$OUTPUT_DIR/${PACKAGE}_${VERSION}_${ARCH}.deb"
 STAGE="$(mktemp -d)"
@@ -46,7 +46,7 @@ install -m 644 "$PROJECT_DIR/README.md" "$STAGE/usr/share/doc/discshelf/README.m
 
 cat > "$STAGE/DEBIAN/control" <<'CONTROL'
 Package: discshelf
-Version: 0.9.2-1
+Version: 0.9.3-1
 Section: office
 Priority: optional
 Architecture: all

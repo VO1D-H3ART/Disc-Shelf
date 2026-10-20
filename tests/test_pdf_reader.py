@@ -53,6 +53,7 @@ class PdfReaderSmokeTests(unittest.TestCase):
     def test_local_three_page_pdf(self):
         source = Path(__file__).parent / 'fixtures' / 'sample.pdf'
         reader = PdfReader()
+        self.assertGreaterEqual(reader.zoom_slider.minimumHeight(), 24)
         self.assertTrue(reader.open_file(str(source)))
         import time
         deadline = time.monotonic() + 3

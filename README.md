@@ -1,4 +1,4 @@
-# DiscShelf v9.2 — Compact PDF page navigation
+# DiscShelf v0.9.3 — PDF slider handle spacing
 
 **Debian 13 (Trixie)** | Offline bookshelf | **Manual launch** | No resident service
 
@@ -116,3 +116,8 @@ The test suite includes EPUB 2/3 parsing, standard XML DOCTYPE compatibility, ma
 - `html_reader.py` / `html_policy.py`: shared offline WebEngine policy, including EPUB `.xhtml`
 - `office_conversion.py`: shared tmpfs verification and Office PDF converter
 - `tests/fixtures/epub_library/`: example EPUB2 and EPUB3 books
+
+
+### v0.9.3 UI fix
+
+The PDF zoom slider now has a 24-pixel minimum height to prevent the circular handle from being clipped at the top. The global Qt slider stylesheet and the HTML/EPUB controls are unchanged.
